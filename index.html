@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width,initial-scale=1" name="viewport"/>
+<meta content="Hybrid Linear Attention for Long-Horizon Video World Models" name="description"/>
+<title>HLA-WM — Hybrid Linear Attention for Long-Horizon Video World Models</title>
+<link href="styles.css?v=20260927-polish" rel="stylesheet"/>
+</head>
+<body class="world">
+
+<header class="paper-header"><h1><span class="paper-name">HLA-WM</span>: Hybrid Linear Attention for <br/>Long-Horizon Video World Models</h1><div class="actions"><a class="button" href="https://github.com/Caesarhhh/HLA_">Code <span aria-hidden="true">↗</span></a><a class="button" href="#method">Method</a><a class="button" href="#results">Results</a><a class="button" href="#videos">Videos</a></div></header><main class="wrap"><figure class="teaser">
+<img alt="Long-range forgetting and revisit consistency." height="684" loading="eager" src="assets/teaser.png" width="1800"/>
+<figcaption>Long-range forgetting and revisit consistency.</figcaption>
+</figure><section class="abstract" id="abstract"><h2>Abstract</h2><p>Long-horizon video world models require persistent memory to preserve scene consistency over extended rollouts. Softmax attention retains the full generation history through a growing KV cache, whereas recurrent linear attention compresses history into fixed-size states with substantially lower memory cost. However, we identify severe long-range forgetting in Gated DeltaNet (GDN), where information from distant but relevant scenes is progressively attenuated by subsequent state updates. To address this limitation, we propose HLA-WM, a training-free hybrid linear-attention framework that combines coarse-grained geometry-guided retrieval with fine-grained recurrent linear-state computation. HLA-WM exploits the affine structure of GDN to cache compact chunk-wise transition summaries, retrieve scene-relevant historical chunks using camera geometry, and recompose them into query-specific recurrent states.</p><p>On the 60-second SANA-WM-Bench, HLA-WM improves all six aggregate revisit-consistency and camera-control metrics of the base autoregressive generator without additional training, including a 0.74 dB PSNR gain and a 28.5% reduction in rotation error. The improvements persist after downstream refinement and generalize to MBench-A, where HLA-WM consistently improves all three revisit-consistency metrics across all four subsets and all evaluated inference modes over 547 samples. At a 60-second context, HLA-WM reduces historical-state memory by 12× relative to full KV caching while incurring at most a 1.6% reduction in inference throughput. These results demonstrate that selectively addressable recurrent memory can improve long-range scene recall while preserving the efficiency advantages of GDN.</p></section>
+<section class="gallery" id="videos"><h2>Video Comparisons</h2><p>Matched prompts and camera trajectories. Full-length videos, side by side.</p><div aria-label="Generation mode" class="tabs"><button aria-pressed="false" data-mode="stage1">Stage 1</button><button aria-pressed="true" data-mode="ar_refiner">AR refinement</button><button aria-pressed="false" data-mode="official_bidirectional_refiner">Bi. refinement</button></div><div class="video-pair"><div><div class="video-label"><span>SANA-WM</span><span>Baseline</span></div><video aria-label="SANA-WM baseline comparison" controls="" id="baseline-video" muted="" playsinline="" preload="metadata"></video></div><div><div class="video-label"><b>HLA-WM</b><b>Top1</b></div><video aria-label="HLA-WM Top1 comparison" controls="" id="ours-video" muted="" playsinline="" preload="metadata"></video></div></div><div class="player-tools"><button id="play-pair">Play both ↗</button><button id="restart-pair">Restart</button><input aria-label="Seek both videos" id="pair-seek" max="60" min="0" step="0.0625" type="range" value="0"/><span class="clock">0:00 / 1:00</span></div><div aria-label="Choose a scene" class="sample-picks"></div><div class="gallery-meta" id="sample-caption"></div><p class="player-status" role="status"></p><noscript>For interactive comparisons, enable JavaScript. You can also view the <a href="videos/ar_refiner_outdoor_nature_018_baseline.mp4">baseline video</a> and <a href="videos/ar_refiner_outdoor_nature_018_ours.mp4">HLA-WM video</a> directly.</noscript></section>
+
+<section class="editorial-section" id="method">
+
+<h2>Method</h2>
+<figure>
+<img alt="HLA-WM overview. Geometry selection, chronological state recomposition, and aligned KV retrieval." height="578" loading="lazy" src="assets/method.png" width="1800"/>
+<figcaption>HLA-WM overview. Geometry selection, chronological state recomposition, and aligned KV retrieval.</figcaption>
+</figure>
+<p>The main setting retains one sink chunk, one recent chunk, and the top-1 historical chunk ranked by geometric overlap. When within-chunk translation-direction change reaches 25°, recent context expands to three chunks.</p>
+<p>After generation, the standard SANA-WM <em>t = 0</em> cache-writing pass also retains frame-wise Phase-A statistics. HLA-WM reuses that existing forward pass. At retrieval time, a Phase-B scan reconstructs history from the selected cached statistics.</p>
+</section>
+<section class="editorial-section" id="results">
+
+<h2>Quantitative Results</h2>
+<p>SANA-WM-Bench, Top1 retrieval. Choose a trajectory split to compare Stage 1 and both refinement modes.</p>
+<div aria-label="Trajectory split" class="tabs" role="tablist">
+<button aria-controls="simple" aria-selected="true" id="tab-simple" onclick="selectSplit('simple')" role="tab">Simple-Trajectory</button>
+<button aria-controls="hard" aria-selected="false" id="tab-hard" onclick="selectSplit('hard')" role="tab">Hard-Trajectory</button>
+</div>
+<div aria-labelledby="tab-simple" id="simple" role="tabpanel">
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th scope="col">Pipeline</th>
+<th scope="col">Method</th>
+<th scope="col">PSNR ↑</th>
+<th scope="col">SSIM ↑</th>
+<th scope="col">LPIPS ↓</th>
+<th scope="col">RotErr ° ↓</th>
+<th scope="col">TransErr ↓</th>
+<th scope="col">CamMC ↓</th>
+<th scope="col">FPS ↑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stage 1</td>
+<td>SANA-WM</td>
+<td>9.18</td>
+<td>0.1729</td>
+<td>0.6327</td>
+<td>19.7040</td>
+<td>2.2625</td>
+<td>2.3974</td>
+<td>22.403</td>
+</tr>
+<tr class="ours">
+<td>Stage 1</td>
+<td>HLA-WM</td>
+<td>9.91</td>
+<td>0.1999</td>
+<td>0.6049</td>
+<td>13.5864</td>
+<td>2.0928</td>
+<td>2.1798</td>
+<td>22.053</td>
+</tr>
+<tr>
+<td>AR refinement</td>
+<td>SANA-WM</td>
+<td>14.44</td>
+<td>0.2770</td>
+<td>0.5738</td>
+<td>20.9315</td>
+<td>2.1587</td>
+<td>2.3121</td>
+<td>8.280</td>
+</tr>
+<tr class="ours">
+<td>AR refinement</td>
+<td>HLA-WM</td>
+<td>14.82</td>
+<td>0.2872</td>
+<td>0.5682</td>
+<td>20.2933</td>
+<td>2.1910</td>
+<td>2.3240</td>
+<td>8.211</td>
+</tr>
+<tr>
+<td>Bi. refinement</td>
+<td>SANA-WM</td>
+<td>13.04</td>
+<td>0.2945</td>
+<td>0.5786</td>
+<td>11.3848</td>
+<td>1.9893</td>
+<td>2.0545</td>
+<td>7.701</td>
+</tr>
+<tr class="ours">
+<td>Bi. refinement</td>
+<td>HLA-WM</td>
+<td>13.56</td>
+<td>0.3148</td>
+<td>0.5614</td>
+<td>8.8823</td>
+<td>1.8637</td>
+<td>1.9127</td>
+<td>7.700</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div aria-labelledby="tab-hard" hidden="" id="hard" role="tabpanel">
+<div class="scroll">
+<table>
+<thead>
+<tr>
+<th scope="col">Pipeline</th>
+<th scope="col">Method</th>
+<th scope="col">PSNR ↑</th>
+<th scope="col">SSIM ↑</th>
+<th scope="col">LPIPS ↓</th>
+<th scope="col">RotErr ° ↓</th>
+<th scope="col">TransErr ↓</th>
+<th scope="col">CamMC ↓</th>
+<th scope="col">FPS ↑</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stage 1</td>
+<td>SANA-WM</td>
+<td>9.37</td>
+<td>0.1774</td>
+<td>0.6044</td>
+<td>20.3759</td>
+<td>1.9952</td>
+<td>2.1507</td>
+<td>22.403</td>
+</tr>
+<tr class="ours">
+<td>Stage 1</td>
+<td>HLA-WM</td>
+<td>10.11</td>
+<td>0.1997</td>
+<td>0.5848</td>
+<td>15.0887</td>
+<td>1.8388</td>
+<td>1.9482</td>
+<td>22.053</td>
+</tr>
+<tr>
+<td>AR refinement</td>
+<td>SANA-WM</td>
+<td>14.12</td>
+<td>0.2719</td>
+<td>0.5621</td>
+<td>25.6330</td>
+<td>2.0099</td>
+<td>2.2079</td>
+<td>8.280</td>
+</tr>
+<tr class="ours">
+<td>AR refinement</td>
+<td>HLA-WM</td>
+<td>14.47</td>
+<td>0.2812</td>
+<td>0.5557</td>
+<td>22.0165</td>
+<td>1.9351</td>
+<td>2.1043</td>
+<td>8.211</td>
+</tr>
+<tr>
+<td>Bi. refinement</td>
+<td>SANA-WM</td>
+<td>13.05</td>
+<td>0.2972</td>
+<td>0.5468</td>
+<td>13.1713</td>
+<td>1.6649</td>
+<td>1.7694</td>
+<td>7.701</td>
+</tr>
+<tr class="ours">
+<td>Bi. refinement</td>
+<td>HLA-WM</td>
+<td>13.51</td>
+<td>0.3142</td>
+<td>0.5384</td>
+<td>10.5268</td>
+<td>1.5449</td>
+<td>1.6230</td>
+<td>7.700</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p class="source">Benchmark results. Higher is better for PSNR, SSIM, and FPS; lower is better for the other metrics.</p>
+<details class="benchmark-details"><summary>MBench-A · 547 samples</summary><div class="scroll">
+<table>
+<thead>
+<tr>
+<th scope="col">Pipeline</th>
+<th scope="col">Method</th>
+<th scope="col">PSNR ↑</th>
+<th scope="col">SSIM ↑</th>
+<th scope="col">LPIPS ↓</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Stage 1</td>
+<td>SANA-WM</td>
+<td>10.17</td>
+<td>0.2545</td>
+<td>0.6251</td>
+</tr>
+<tr class="ours">
+<td>Stage 1</td>
+<td>HLA-WM</td>
+<td>11.01</td>
+<td>0.2848</td>
+<td>0.5823</td>
+</tr>
+<tr>
+<td>AR refinement</td>
+<td>SANA-WM</td>
+<td>12.36</td>
+<td>0.2996</td>
+<td>0.6554</td>
+</tr>
+<tr class="ours">
+<td>AR refinement</td>
+<td>HLA-WM</td>
+<td>12.73</td>
+<td>0.3122</td>
+<td>0.6447</td>
+</tr>
+<tr>
+<td>Bi. refinement</td>
+<td>SANA-WM</td>
+<td>12.94</td>
+<td>0.3310</td>
+<td>0.5597</td>
+</tr>
+<tr class="ours">
+<td>Bi. refinement</td>
+<td>HLA-WM</td>
+<td>13.52</td>
+<td>0.3431</td>
+<td>0.5470</td>
+</tr>
+</tbody>
+</table>
+</div><p class="source">Ablation results.</p></details>
+</section>
+<section class="editorial-section">
+
+<h2>Long-Range Revisit Comparisons</h2>
+<figure>
+<img alt="Long-range revisit comparisons. Causal AR refinement (top) and bidirectional refinement (bottom)." height="1228" loading="lazy" src="assets/qualitative.png" width="1800"/>
+<figcaption>Long-range revisit comparisons. Causal AR refinement (top) and bidirectional refinement (bottom).</figcaption>
+</figure>
+</section>
+<script>function selectSplit(key){for(const k of ['simple','hard']){document.getElementById(k).hidden=k!==key;document.getElementById('tab-'+k).setAttribute('aria-selected',String(k===key));}}</script>
+</main>
+<footer class="wrap"><a href="https://caesarhhh.github.io/hla/">Related project: HLA</a></footer>
+<script defer="" src="samples.js"></script><script defer="" src="gallery.js"></script></body>
+</html>
